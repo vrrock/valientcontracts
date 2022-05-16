@@ -1,0 +1,14 @@
+pragma solidity >=0.4.22 <0.9.0;
+
+import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
+import './ElectionStrategy.sol';
+
+contract SimpleElectionStrategy is ElectionStrategy, Ownable{
+
+        function SimpleElectionStrategy() public Ownable(){
+        }
+
+        function isYes(uint countYes, uint countNo) public view returns (bool){
+            return countYes > countNo;
+        }
+}

@@ -1,0 +1,17 @@
+pragma solidity >=0.4.22 <0.9.0;
+
+import 'zeppelin-solidity/contracts/payment/PullPayment.sol';
+import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
+
+
+contract CreatorWallet is PullPayment, Ownable {
+    event PaymentAuthorized(address beneficiary, uint amount);
+    function authorizePayment(address dest, uint amount) public onlyOwner {
+        asyncSend(dest, amount);
+        PaymentAuthorized(dest, amount);
+    }
+
+    function () public payable {
+        
+    }
+}

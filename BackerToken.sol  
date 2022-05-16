@@ -1,0 +1,205 @@
+pragma solidity >=0.4.22 <0.9.0;
+
+import 'zeppelin-solidity/contracts/token/MintableToken.sol';
+
+contract BackerToken is MintableToken{
+
+    string public name;                
+    uint8 public decimals;            
+    string public symbol;              
+    string public version = 'MMT_0.2'; 
+
+
+    struct  Checkpoint {
+
+        uint128 fromBlock;
+
+        uint128 value;
+    }
+
+
+ 
+    mapping (address => Checkpoint[]) balances;
+
+    mapping (address => mapping (address => uint256)) allowed;
+
+    Checkpoint[] totalSupplyHistory;
+
+
+    uint creationBlock;
+
+
+
+    function BackerToken(
+
+        string _tokenName,
+        uint8 _decimalUnits,
+        string _tokenSymbol
+
+    ) public {
+        name = _tokenName;                                 
+        decimals = _decimalUnits;                          
+        symbol = _tokenSymbol;                             
+        creationBlock = block.number;
+    }
+
+
+    function mint(address _to, uint256 _amount) onlyOwner canMint public returns (bool) {
+        generateTokens(_to, _amount);
+        return true;
+    }
+
+
+    function transfer(address _to, uint256 _amount) public returns (bool success) {
+        require(mintingFinished);
+        return doTransfer(msg.sender, _to, _amount);
+    }
+
+    function transferFrom(address _from, address _to, uint256 _amount
+    ) public returns (bool success) {
+
+        return doTransfer(_from, _to, _amount);
+    }
+
+    function doTransfer(address _from, address _to, uint _amount
+    ) internal returns(bool) {
+
+           if (_amount == 0) {
+               return true;
+           }
+
+           
+           require((_to != 0) && (_to != address(this)));
+
+           
+           var previousBalanceFrom = balanceOfAt(_from, block.number);
+           if (previousBalanceFrom < _amount) {
+               return false;
+           }
+
+
+           updateValueAtNow(balances[_from], previousBalanceFrom - _amount);
+
+         
+           var previousBalanceTo = balanceOfAt(_to, block.number);
+           require(previousBalanceTo + _amount >= previousBalanceTo); // Check for overflow
+           updateValueAtNow(balances[_to], previousBalanceTo + _amount);
+
+           Transfer(_from, _to, _amount);
+
+           return true;
+    }
+
+    function balanceOf(address _owner) public constant returns (uint256 balance) {
+        return balanceOfAt(_owner, block.number);
+    }
+
+    function approve(address _spender, uint256 _amount) public returns (bool success) {
+        require(mintingFinished);
+
+        
+        require((_amount == 0) || (allowed[msg.sender][_spender] == 0));
+
+
+
+        allowed[msg.sender][_spender] = _amount;
+        Approval(msg.sender, _spender, _amount);
+        return true;
+    }
+
+
+    function allowance(address _owner, address _spender
+    ) public constant returns (uint256 remaining) {
+        return allowed[_owner][_spender];
+    }
+
+
+
+
+    function balanceOfAt(address _owner, uint _blockNumber) public constant
+        returns (uint) {
+
+        return getValueAt(balances[_owner], _blockNumber);
+
+    }
+
+    function totalSupplyAt(uint _blockNumber) public constant returns(uint) {
+
+        return getValueAt(totalSupplyHistory, _blockNumber);
+
+    }
+
+
+    function generateTokens(address _owner, uint _amount
+    ) public  returns (bool) {
+        uint curTotalSupply = totalSupply;
+        require(curTotalSupply + _amount >= curTotalSupply); // Check for overflowgenerateTokens
+        uint previousBalanceTo = balanceOf(_owner);
+        require(previousBalanceTo + _amount >= previousBalanceTo); // Check for overflow
+        updateValueAtNow(totalSupplyHistory, curTotalSupply + _amount);
+        updateValueAtNow(balances[_owner], previousBalanceTo + _amount);
+        Transfer(0, _owner, _amount);
+        return true;
+    }
+
+
+    function getValueAt(Checkpoint[] storage checkpoints, uint _block
+    ) constant internal returns (uint) {
+        if (checkpoints.length == 0) return 0;
+
+        if (_block >= checkpoints[checkpoints.length-1].fromBlock)
+            return checkpoints[checkpoints.length-1].value;
+        if (_block < checkpoints[0].fromBlock) return 0;
+
+        uint min = 0;
+        uint max = checkpoints.length-1;
+        while (max > min) {
+            uint mid = (max + min + 1)/ 2;
+            if (checkpoints[mid].fromBlock<=_block) {
+                min = mid;
+            } else {
+                max = mid-1;
+            }
+        }
+        return checkpoints[min].value;
+    }
+
+
+    function updateValueAtNow(Checkpoint[] storage checkpoints, uint _value
+    ) internal  {
+        if ((checkpoints.length == 0)
+        || (checkpoints[checkpoints.length -1].fromBlock < block.number)) {
+               Checkpoint storage newCheckPoint = checkpoints[ checkpoints.length++ ];
+               newCheckPoint.fromBlock =  uint128(block.number);
+               newCheckPoint.value = uint128(_value);
+           } else {
+               Checkpoint storage oldCheckPoint = checkpoints[checkpoints.length-1];
+               oldCheckPoint.value = uint128(_value);
+           }
+    }
+
+
+    function isContract(address _addr) constant internal returns(bool) {
+        uint size;
+        if (_addr == 0) return false;
+        assembly {
+            size := extcodesize(_addr)
+        }
+        return size>0;
+    }
+
+    function min(uint a, uint b) pure internal returns (uint) {
+        return a < b ? a : b;
+    }
+
+
+
+    event ClaimedTokens(address indexed _token, address indexed _controller, uint _amount);
+    event Transfer(address indexed _from, address indexed _to, uint256 _amount);
+    event Approval(
+        address indexed _owner,
+        address indexed _spender,
+        uint256 _amount
+        );
+
+}
